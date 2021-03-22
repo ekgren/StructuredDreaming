@@ -11,4 +11,9 @@ class ModelSmall(torch.nn.Module):
     def forward(self):
         return self.w
 
-# TODO: add progressive growing
+
+# TODO: Add progressive growing
+# TODO: Add sin model
+# TODO: Add Dall-e decoder
+# TODO: Add stylegan
+

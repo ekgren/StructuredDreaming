@@ -55,16 +55,16 @@ def get_patch_upscaled(img,
     return img_out
 
 
-def get_downscaled(img,
-                   scale_size_min,
-                   scale_size_max,
-                   patch_size_min,
-                   patch_size_max,
-                   res_out=224,
-                   mode='area',
-                   drop=0.,
-                   drop_before_upscale=False,
-                   drop2d=True):
+def get_patch_downscaled(img,
+                         scale_size_min,
+                         scale_size_max,
+                         patch_size_min,
+                         patch_size_max,
+                         res_out=224,
+                         mode='area',
+                         drop=0.,
+                         drop_before_upscale=False,
+                         drop2d=True):
     """
     Get patch and downscale it before upscaling it to target resolution.
     """
@@ -144,16 +144,16 @@ def process_img(img,
 
     if downscaled_no > 0:
         for _ in range(downscaled_no):
-            img_patches.append(get_downscaled(img,
-                                              scale_size_min=scale_size_min,
-                                              scale_size_max=scale_size_max,
-                                              patch_size_min=scale_patch_size_min,
-                                              patch_size_max=scale_patch_size_max,
-                                              res_out=res_out,
-                                              mode=mode,
-                                              drop=drop_downscaled,
-                                              drop_before_upscale=drop_downscaled_before_upscale,
-                                              drop2d=drop_downscale_2d))
+            img_patches.append(get_patch_downscaled(img,
+                                                    scale_size_min=scale_size_min,
+                                                    scale_size_max=scale_size_max,
+                                                    patch_size_min=scale_patch_size_min,
+                                                    patch_size_max=scale_patch_size_max,
+                                                    res_out=res_out,
+                                                    mode=mode,
+                                                    drop=drop_downscaled,
+                                                    drop_before_upscale=drop_downscaled_before_upscale,
+                                                    drop2d=drop_downscale_2d))
 
     if len(img_patches) == 0:
         img_patches.append(torch.nn.functional.interpolate(img, (res_out, res_out), mode=mode))
@@ -161,8 +161,12 @@ def process_img(img,
     return torch.cat(img_patches, 0)
 
 
+def generate_img():
+    return None
+
+
 def grad_drop(grad, drop=0., drop2d=True):
-    """ Dropout on gradient. """
+    """ Dropout gradient. """
     with torch.no_grad():
         if not drop2d:
             grad += -grad + dropout(grad, drop)
