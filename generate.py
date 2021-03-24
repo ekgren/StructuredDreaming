@@ -12,28 +12,62 @@ from tqdm import tqdm
 
 from structure.clip import load, tokenize, convert_weights
 from structure.model import ImgBase
-from structure.utils import Pipeline, Upscale, Pixelate, Dropper, Prod, SamplePatch, grad_sign, model_to_fp32
+from structure.utils import Pipeline, Upscale, Pixelate, Dropper, Prod, SamplePatch, grad_sign, model_to_fp32, ArgDict
 
 @click.command()
 @click.pass_context
 
-# First try at options.
-@click.option('--text', help='Text prompt')
-@click.option('--iter', type=int, help='Number of iterations')
-@click.option('--seed', type=int, help='Random seed')
+# General options.
+@click.option('--text', help='Text prompt', required=True)
+@click.option('--seed', type=int, help='Random seed', default=0)
 @click.option('--outdir', help='Where to save the output images', type=str, required=True, metavar='DIR')
+
+# Training.
+@click.option('--iterations', help='Number of iterations of generating image [default: 1000]', type=int, default=1000)
+@click.option('--grad_acc_steps', help='Gradient accumulation steps [default: 1]', type=int, default=1)
+@click.option('--lr', help='Learning rate [default: 0.01]', type=float, default=0.01)
+#TODO: add betas = (0.99, 0.999)
+
+# Model.
+@click.option('--image_size', help='Image size [default: 512]', type=int, default=512)
+@click.option('--weight_init', help='Image weight init [default: 0.05]', type=float, default=0.05)
+@click.option('--decolorize', help='Image weight init [default: 0.001]', type=float, default=0.001)
+@click.option('--darken', help='Image weight init [default: 0.005]', type=float, default=0.005)
+
+# General img options.
+#TODO: add mode = 'area'
+
+# Pixelate pipeline.
+@click.option('--px_no', help='Number of patches [default: 32]', type=int, default=32)
+@click.option('--px_patch_size_min', help='Pixelate patch min size [default: 256]', type=int, default=256)
+@click.option('--px_patch_size_max', help='Pixelate patch max size [default: 512]', type=int, default=512)
+@click.option('--px_size_min', help='Pixelation min size [default: 32]', type=int, default=32)
+@click.option('--px_size_max', help='Pixelation max size [default: 224]', type=int, default=224)
+@click.option('--px_drop', help='Pixelation dropout [default: 0.3]', type=float, default=0.3)
+
+# Upscale pipeline.
+@click.option('--up_no', help='Number of patches [default: 32]', type=int, default=32)
+@click.option('--up_patch_size_min', help='Upscale patch min size [default: 64]', type=int, default=64)
+@click.option('--up_patch_size_max', help='Upscale patch max size [default: 512]', type=int, default=512)
+@click.option('--up_drop', help='Pixelation dropout [default: 0.3]', type=float, default=0.3)
+
+# Grow parameters.
+@click.option('--grow_init_res', help='Number of patches [default: 32]', type=int, default=32)
+@click.option('--grow_step_size', help='Number of patches [default: 64]', type=int, default=64)
+@click.option('--grow_step', help='Number of patches [default: 20]', type=int, default=20)
+
 def main(ctx, **config_kwargs):
     """Generate images.
     Examples:
     """
-    args = dict(**config_kwargs)
+    args = ArgDict(**config_kwargs)
     # Print options.
     print()
     print('Generation options:')
     print(json.dumps(args, indent=2))
     print()
-    print(f'Output directory:   {args["outdir"]}')
-    print(f'Prompt:             {args["text"]}')
+    print(f'Output directory:   {args.outdir}')
+    print(f'Prompt:             {args.text}')
     print()
 
     # Initialize
@@ -47,82 +81,82 @@ def main(ctx, **config_kwargs):
     #################
 
     # Training
-    iterations = 2000
-    grad_acc_steps = 1
-    lr = 0.01
+    # iterations = 2000
+    # grad_acc_steps = 1
+    # lr = 0.01
     betas = (0.99, 0.999)
 
     # Model
-    image_size = 512
-    weight_init = 0.05
-    decolorize = 0.001
-    darken = 0.01
+    # image_size = 512
+    # weight_init = 0.05
+    # decolorize = 0.001
+    # darken = 0.007
 
     # General img options
     res_out = 224
     mode = 'area'
 
     # Pixelate pipeline
-    px_no = 64
-    px_patch_size_min = 256
-    px_patch_size_max = 512
-    px_size_min = 32
-    px_size_max = 224
-    px_drop = 0.3
+    # px_no = 64
+    # px_patch_size_min = 256
+    # px_patch_size_max = 512
+    # px_size_min = 32
+    # px_size_max = 224
+    # px_drop = 0.3
 
     # Upscale pipeline
-    up_no = 64
-    up_patch_size_min = 64
-    up_patch_size_max = 512
-    up_drop = 0.3
+    # up_no = 64
+    # up_patch_size_min = 64
+    # up_patch_size_max = 512
+    # up_drop = 0.3
 
     # Grow parameters
-    grow_init_res = 32
-    grow_step_size = 64
-    grow_step = 20
+    # grow_init_res = 32
+    # grow_step_size = 64
+    # grow_step = 20
     #################
 
     print("Loading clip.")
     perceptor, normalize_image = load('ViT-B/32', jit=False)
-    txt_tok = tokenize(args["text"])
+    txt_tok = tokenize(args.text)
     text_latent = perceptor.encode_text(txt_tok.cuda()).detach()
 
     # Setting up image generation
-    model = ImgBase(size=image_size,
-                    weight_init=weight_init,
-                    decolorize=decolorize,
-                    darken=darken).cuda()
+    model = ImgBase(size=args.image_size,
+                    weight_init=args.weight_init,
+                    decolorize=args.decolorize,
+                    darken=args.darken).cuda()
     normalize = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073),
                                                  (0.26862954, 0.26130258, 0.27577711))
-    optimizer = torch.optim.Adam(model.parameters(), lr, betas=betas)
+    optimizer = torch.optim.Adam(model.parameters(), args.lr, betas=betas)
 
-    grow_res = grow_init_res
+    grow_res = args.grow_init_res
     grow_pipeline = Pipeline(
         Pixelate(scale_size_min=grow_res, scale_size_max=grow_res),
-        Upscale(res_out=image_size, mode=mode),
+        Upscale(res_out=args.image_size, mode=mode),
     )
 
     px_pipeline = Pipeline(
-        SamplePatch(size_min=px_patch_size_min, size_max=px_patch_size_max),
-        Dropper(drop=px_drop, drop2d=True),
-        Pixelate(scale_size_min=px_size_min, scale_size_max=px_size_max),
+        SamplePatch(size_min=args.px_patch_size_min, size_max=args.px_patch_size_max),
+        Dropper(drop=args.px_drop, drop2d=True),
+        Pixelate(scale_size_min=args.px_size_min, scale_size_max=args.px_size_max),
         Upscale(res_out=res_out, mode=mode),
-        Dropper(drop=px_drop, drop2d=True),
+        Dropper(drop=args.px_drop, drop2d=True),
     )
 
     up_pipeline = Pipeline(
-        SamplePatch(up_patch_size_min, up_patch_size_max),
-        Dropper(drop=up_drop, drop2d=True),
+        SamplePatch(args.up_patch_size_min, args.up_patch_size_max),
+        Dropper(drop=args.up_drop, drop2d=True),
         Upscale(res_out=res_out, mode=mode),
-        Dropper(drop=up_drop, drop2d=True),
+        Dropper(drop=args.up_drop, drop2d=True),
     )
 
-    patches = [px_pipeline] * px_no + [up_pipeline] * up_no
+    patches = [px_pipeline] * args.px_no + [up_pipeline] * args.up_no
     patches = Prod(*patches)
 
     # Image generation
     print('Generating image.')
-    for i in tqdm(range(iterations)):
+    for i in tqdm(range(args.iterations)):
         optimizer.zero_grad()
         img = normalize(model())
         img = grow_pipeline(img)
@@ -133,7 +167,7 @@ def main(ctx, **config_kwargs):
         loss = 10 * torch.cosine_similarity(text_latent, img_latents, dim=-1).mean().neg()
         loss.backward()
 
-        if (i + 1) % grad_acc_steps == 0:
+        if (i + 1) % args.grad_acc_steps == 0:
             model_to_fp32(perceptor.visual)
             model_to_fp32(model)
             grad_sign(model.w.grad)
@@ -145,11 +179,11 @@ def main(ctx, **config_kwargs):
         model.post_process()
 
         # Update grow resolution
-        if (i + 1) % grow_step == 0:
-            grow_res = min(image_size, grow_res + grow_step_size)
+        if (i + 1) % args.grow_step == 0:
+            grow_res = min(args.image_size, grow_res + args.grow_step_size)
             grow_pipeline = Pipeline(
                 Pixelate(scale_size_min=grow_res, scale_size_max=grow_res),
-                Upscale(res_out=image_size, mode=mode),
+                Upscale(res_out=args.image_size, mode=mode),
             )
 
         # DEBUG
@@ -157,12 +191,12 @@ def main(ctx, **config_kwargs):
             with torch.no_grad():
                 img = model()
                 _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
-                PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
+                PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args.outdir}/seed{args.seed:04d}.png')
 
     with torch.no_grad():
         img = model()
         _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
-        PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
+        PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args.outdir}/seed{args.seed:04d}.png')
 
 
 if __name__ == "__main__":

@@ -16,14 +16,12 @@ class ImgBase(torch.nn.Module):
     def post_process(self):
         with torch.no_grad():
             self.w.clamp_(0., 1.)
-            if self.decolorize > 0:
+            if self.decolorize > 0.:
                 self.w += self.decolorize * \
                           (-self.w + self.w.mean(dim=1, keepdim=True).repeat(1, 3, 1, 1))
-            if self.darken > 0:
+            if self.darken > 0.:
                 self.w *= 1. - self.darken
 
-
-# TODO: Add progressive growing
 # TODO: Add sin model
 # TODO: Add Dall-e decoder
 # TODO: Add stylegan
