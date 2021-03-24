@@ -3,97 +3,89 @@ import random
 from torch.nn.functional import dropout, dropout2d, interpolate, avg_pool2d
 import torch
 
+class SamplePatch(object):
+    def __init__(self, size_min, size_max):
+        assert size_min <= size_max, "size_min should be equal or smaller than size_max."
+        assert size_min >= 2, "size_min can't be smaller than 2."
 
-def get_random_patch(img, size_min, size_max):
-    """ Get uniformly sampled patch from image. """
-    bs, ch, h, w = img.shape
-    assert h == w, "Assumes equal width and height of image."
-    assert size_max <= h, "size_max has to be smaller than image height."
-    assert size_min <= size_max, "size_min should be equal or smaller than size_max."
-    assert size_min >= 2, "size_min can't be smaller than 2."
-    if size_min == size_max:
-        patch_size = size_max
-    else:
-        patch_size = random.randint(size_min, size_max)
-    h_offset = random.randint(0, h - patch_size)
-    w_offset = random.randint(0, w - patch_size)
-    patch_h_s = h_offset
-    patch_h_e = h_offset + patch_size
-    patch_w_s = w_offset
-    patch_w_e = w_offset + patch_size
-    img_out = img[:, :, patch_h_s:patch_h_e, patch_w_s:patch_w_e]
-    return img_out
+        self.size_min = size_min
+        self.size_max = size_max
 
-
-def get_patch_upscaled(img,
-                       size_min,
-                       size_max,
-                       res_out=224,
-                       mode='area',
-                       drop=0.,
-                       drop_before_upscale=False,
-                       drop2d=True):
-    """ Get patch and scale it to target resolution. """
-    img_out = get_random_patch(img, size_min, size_max)
-    bs, ch, h, w = img_out.shape
-
-    if drop > 0. and drop_before_upscale:
-        if not drop2d:
-            img_out = dropout(img_out, p=drop)
+    def __call__(self, img):
+        """ Get uniformly sampled patch from image. """
+        bs, ch, h, w = img.shape
+        assert h == w, "Assumes equal width and height of image."
+        assert self.size_max <= h, "size_max has to be smaller than image height."
+        if self.size_min == self.size_max:
+            patch_size = self.size_max
         else:
-            img_out = dropout2d(img_out, p=drop)
+            patch_size = random.randint(self.size_min, self.size_max)
+        h_offset = random.randint(0, h - patch_size)
+        w_offset = random.randint(0, w - patch_size)
+        patch_h_s = h_offset
+        patch_h_e = h_offset + patch_size
+        patch_w_s = w_offset
+        patch_w_e = w_offset + patch_size
+        img_out = img[:, :, patch_h_s:patch_h_e, patch_w_s:patch_w_e]
+        return img_out
 
-    if h != res_out:
-        img_out = interpolate(img_out, (res_out, res_out), mode=mode)
 
-    if drop > 0. and not drop_before_upscale:
-        if not drop2d:
-            img_out = dropout(img_out, p=drop)
+class Dropper(object):
+    def __init__(self, drop=0., drop2d=True):
+        self.drop = drop
+        self.drop2d = drop2d
+
+    def __call__(self, img):
+        if not self.drop2d:
+            return dropout(img, p=self.drop)
         else:
-            img_out = dropout2d(img_out, p=drop)
-
-    return img_out
+            return dropout2d(img, p=self.drop)
 
 
-def get_patch_downscaled(img,
-                         scale_size_min,
-                         scale_size_max,
-                         patch_size_min,
-                         patch_size_max,
-                         res_out=224,
-                         mode='area',
-                         drop=0.,
-                         drop_before_upscale=False,
-                         drop2d=True):
-    """
-    Get patch and downscale it before upscaling it to target resolution.
-    """
-    img_out = get_random_patch(img, patch_size_min, patch_size_max)
-    bs, ch, h, w = img_out.shape
-    downscale = random.randint(scale_size_min, scale_size_max)
-    kernel_size = int(h / downscale)
-    # TODO: Figure out better way to check that we don't get errors than try/catch
-    if downscale < res_out and kernel_size > 0 and kernel_size < h:
-        try:
-            img_out = avg_pool2d(img_out, kernel_size)
-        except:
-            pass
+class Upscale(object):
+    def __init__(self, res_out=224, mode='area'):
+        self.res_out = res_out
+        self.mode = mode
 
-    if drop_before_upscale:
-        if not drop2d:
-            img_out = dropout(img_out, p=drop)
+    def __call__(self, img):
+        bs, ch, h, w = img.shape
+        if h != self.res_out:
+            return interpolate(img, (self.res_out, self.res_out), mode=self.mode)
         else:
-            img_out = dropout2d(img_out, p=drop)
+            return img
 
-    img_out = interpolate(img_out, (res_out, res_out), mode=mode)
 
-    if not drop_before_upscale:
-        if not drop2d:
-            img_out = dropout(img_out, p=drop)
-        else:
-            img_out = dropout2d(img_out, p=drop)
+class Downscale(object):
+    def __init__(self, scale_size_min, scale_size_max):
+        self.scale_size_max = scale_size_max
+        self.scale_size_min = scale_size_min
 
-    return img_out
+    def __call__(self, img):
+        bs, ch, h, w = img.shape
+        downscale = random.randint(self.scale_size_min, self.scale_size_max)
+        return img
+        kernel_size = int(h / downscale)
+        return avg_pool2d(img, kernel_size)
+
+
+class Pipeline(object):
+    def __init__(self, *args):
+        self.functions = args
+
+    def __call__(self, img):
+        tmp = img
+        for f in self.functions:
+            tmp = f(tmp)
+        return tmp
+
+class Prod(object):
+    def __init__(self, *args):
+        self.functions = args
+
+    def __call__(self, x):
+        return [f(x) for f in self.functions]
+
+
 
 
 def get_sub(img, steps=2):
@@ -128,42 +120,14 @@ def process_img(img,
                 drop_downscale_2d=True,
                 res_out=224,
                 mode='area'):
-    """ Stuff happens here. """
-    img_patches = []
-
-    if patches_no > 0:
-        for _ in range(patches_no):
-            img_patches.append(get_patch_upscaled(img,
-                                                  size_min=patch_size_min,
-                                                  size_max=patch_size_max,
-                                                  res_out=res_out,
-                                                  mode=mode,
-                                                  drop=drop_patch,
-                                                  drop_before_upscale=drop_patch_before_upscale,
-                                                  drop2d=drop_patch_2d))
-
-    if downscaled_no > 0:
-        for _ in range(downscaled_no):
-            img_patches.append(get_patch_downscaled(img,
-                                                    scale_size_min=scale_size_min,
-                                                    scale_size_max=scale_size_max,
-                                                    patch_size_min=scale_patch_size_min,
-                                                    patch_size_max=scale_patch_size_max,
-                                                    res_out=res_out,
-                                                    mode=mode,
-                                                    drop=drop_downscaled,
-                                                    drop_before_upscale=drop_downscaled_before_upscale,
-                                                    drop2d=drop_downscale_2d))
-
-    if len(img_patches) == 0:
-        img_patches.append(torch.nn.functional.interpolate(img, (res_out, res_out), mode=mode))
-
-    return torch.cat(img_patches, 0)
 
 
-def generate_img():
-    return None
+    patches = [Pipeline(SamplePatch(32, 224), Dropper(0.1), Downscale(32, 224), Upscale())]*downscaled_no 
+    patches += [Pipeline(SamplePatch(32, 224), Downscale(32, 224), Upscale())]*downscaled_no 
+    patches += [Pipeline(SamplePatch(32, 224), Dropper(0.1), Upscale())]*patches_no
+    patches = Prod(*patches)
 
+    return torch.cat(patches(img), 0)
 
 def grad_drop(grad, drop=0., drop2d=True):
     """ Dropout gradient. """
