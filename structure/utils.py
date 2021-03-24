@@ -122,9 +122,9 @@ def process_img(img,
                 mode='area'):
 
 
-    patches = [Pipeline(SamplePatch(32, 224), Dropper(0.1), Downscale(32, 224), Upscale())]*downscaled_no 
+    patches = [Pipeline(SamplePatch(32, 224), Dropper(d0), Downscale(32, 224), Dropper(d1), Upscale())]*downscaled_no 
     patches += [Pipeline(SamplePatch(32, 224), Downscale(32, 224), Upscale())]*downscaled_no 
-    patches += [Pipeline(SamplePatch(32, 224), Dropper(0.1), Upscale())]*patches_no
+    patches += [Pipeline(SamplePatch(32, 224), Dropper(drop_patch), Upscale())]*patches_no
     patches = Prod(*patches)
 
     return torch.cat(patches(img), 0)
