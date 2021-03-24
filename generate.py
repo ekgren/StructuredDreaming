@@ -81,39 +81,11 @@ def main(ctx, **config_kwargs):
     #################
 
     # Training
-    # iterations = 2000
-    # grad_acc_steps = 1
-    # lr = 0.01
     betas = (0.99, 0.999)
-
-    # Model
-    # image_size = 512
-    # weight_init = 0.05
-    # decolorize = 0.001
-    # darken = 0.007
 
     # General img options
     res_out = 224
     mode = 'area'
-
-    # Pixelate pipeline
-    # px_no = 64
-    # px_patch_size_min = 256
-    # px_patch_size_max = 512
-    # px_size_min = 32
-    # px_size_max = 224
-    # px_drop = 0.3
-
-    # Upscale pipeline
-    # up_no = 64
-    # up_patch_size_min = 64
-    # up_patch_size_max = 512
-    # up_drop = 0.3
-
-    # Grow parameters
-    # grow_init_res = 32
-    # grow_step_size = 64
-    # grow_step = 20
     #################
 
     print("Loading clip.")
@@ -158,7 +130,7 @@ def main(ctx, **config_kwargs):
     print('Generating image.')
     for i in tqdm(range(args.iterations)):
         optimizer.zero_grad()
-        img = normalize(model())
+        img = normalize_image(model())
         img = grow_pipeline(img)
 
         img_processed = torch.cat(patches(img), 0)
@@ -191,12 +163,14 @@ def main(ctx, **config_kwargs):
             with torch.no_grad():
                 img = model()
                 _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
-                PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args.outdir}/seed{args.seed:04d}.png')
+                f_name = f'{args.outdir}/{args.text.replace(" ", "_")}__seed{args.seed:04d}.png'
+                PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f_name)
 
     with torch.no_grad():
         img = model()
         _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
-        PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args.outdir}/seed{args.seed:04d}.png')
+        f_name = f'{args.outdir}/{args.text.replace(" ", "_")}__seed{args.seed:04d}.png'
+        PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f_name)
 
 
 if __name__ == "__main__":
