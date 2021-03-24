@@ -7,11 +7,12 @@ import click
 import numpy as np
 import PIL.Image
 import torch
+import torchvision
 from tqdm import tqdm
 
-from structure.clip import load, tokenize
-from structure.model import ModelSmall
-from structure.utils import process_img, grad_sign
+from structure.clip import load, tokenize, convert_weights
+from structure.model import ImgBase
+from structure.utils import Pipeline, Upscale, Pixelate, Dropper, Prod, SamplePatch, grad_sign, model_to_fp32
 
 @click.command()
 @click.pass_context
@@ -46,31 +47,39 @@ def main(ctx, **config_kwargs):
     #################
 
     # Training
-    iterations = args["iter"]
+    iterations = 2000
     grad_acc_steps = 1
-    lr = 0.02
+    lr = 0.01
     betas = (0.99, 0.999)
 
     # Model
-    model_size = 512
+    image_size = 512
+    weight_init = 0.05
+    decolorize = 0.001
+    darken = 0.01
 
-    # Process image
-    patches_no = 32
-    downscaled_no = 32
-    patch_size_min = 32
-    patch_size_max = 224
-    scale_size_min = 32
-    scale_size_max = 224
-    scale_patch_size_min = 32
-    scale_patch_size_max = 224
-    drop_patch = 0.
-    drop_downscaled = 0.
-    drop_patch_before_upscale = False
-    drop_downscaled_before_upscale = False
-    drop_patch_2d = True
-    drop_downscale_2d = True
+    # General img options
     res_out = 224
     mode = 'area'
+
+    # Pixelate pipeline
+    px_no = 64
+    px_patch_size_min = 256
+    px_patch_size_max = 512
+    px_size_min = 32
+    px_size_max = 224
+    px_drop = 0.3
+
+    # Upscale pipeline
+    up_no = 64
+    up_patch_size_min = 64
+    up_patch_size_max = 512
+    up_drop = 0.3
+
+    # Grow parameters
+    grow_init_res = 32
+    grow_step_size = 64
+    grow_step = 20
     #################
 
     print("Loading clip.")
@@ -78,50 +87,82 @@ def main(ctx, **config_kwargs):
     txt_tok = tokenize(args["text"])
     text_latent = perceptor.encode_text(txt_tok.cuda()).detach()
 
-    model = ModelSmall(size=model_size).cuda()
-
+    # Setting up image generation
+    model = ImgBase(size=image_size,
+                    weight_init=weight_init,
+                    decolorize=decolorize,
+                    darken=darken).cuda()
+    normalize = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073),
+                                                 (0.26862954, 0.26130258, 0.27577711))
     optimizer = torch.optim.Adam(model.parameters(), lr, betas=betas)
 
+    grow_res = grow_init_res
+    grow_pipeline = Pipeline(
+        Pixelate(scale_size_min=grow_res, scale_size_max=grow_res),
+        Upscale(res_out=image_size, mode=mode),
+    )
+
+    px_pipeline = Pipeline(
+        SamplePatch(size_min=px_patch_size_min, size_max=px_patch_size_max),
+        Dropper(drop=px_drop, drop2d=True),
+        Pixelate(scale_size_min=px_size_min, scale_size_max=px_size_max),
+        Upscale(res_out=res_out, mode=mode),
+        Dropper(drop=px_drop, drop2d=True),
+    )
+
+    up_pipeline = Pipeline(
+        SamplePatch(up_patch_size_min, up_patch_size_max),
+        Dropper(drop=up_drop, drop2d=True),
+        Upscale(res_out=res_out, mode=mode),
+        Dropper(drop=up_drop, drop2d=True),
+    )
+
+    patches = [px_pipeline] * px_no + [up_pipeline] * up_no
+    patches = Prod(*patches)
+
+    # Image generation
     print('Generating image.')
     for i in tqdm(range(iterations)):
         optimizer.zero_grad()
-        img = model()
-        img_processed = process_img(img,
-                                    patches_no=patches_no,
-                                    downscaled_no=downscaled_no,
-                                    patch_size_min=patch_size_min,
-                                    patch_size_max=patch_size_max,
-                                    scale_size_min=scale_size_min,
-                                    scale_size_max=scale_size_max,
-                                    scale_patch_size_min=scale_patch_size_min,
-                                    scale_patch_size_max=scale_patch_size_max,
-                                    drop_patch=drop_patch,
-                                    drop_downscaled=drop_downscaled,
-                                    drop_patch_before_upscale=drop_patch_before_upscale,
-                                    drop_downscaled_before_upscale=drop_downscaled_before_upscale,
-                                    drop_patch_2d=drop_patch_2d,
-                                    drop_downscale_2d=drop_downscale_2d,
-                                    res_out=res_out,
-                                    mode=mode)
+        img = normalize(model())
+        img = grow_pipeline(img)
+
+        img_processed = torch.cat(patches(img), 0)
         img_latents = perceptor.encode_image(img_processed)
-        loss = 10*torch.cosine_similarity(text_latent, img_latents, dim=-1).mean().neg()
+
+        loss = 10 * torch.cosine_similarity(text_latent, img_latents, dim=-1).mean().neg()
         loss.backward()
-        if (i+1) % grad_acc_steps == 0:
+
+        if (i + 1) % grad_acc_steps == 0:
+            model_to_fp32(perceptor.visual)
+            model_to_fp32(model)
             grad_sign(model.w.grad)
             optimizer.step()
+            convert_weights(perceptor.visual)
+            convert_weights(model)
 
-        with torch.no_grad():
-            model.w.clamp_(0., 1.)
+        # Post processing
+        model.post_process()
+
+        # Update grow resolution
+        if (i + 1) % grow_step == 0:
+            grow_res = min(image_size, grow_res + grow_step_size)
+            grow_pipeline = Pipeline(
+                Pixelate(scale_size_min=grow_res, scale_size_max=grow_res),
+                Upscale(res_out=image_size, mode=mode),
+            )
 
         # DEBUG
         if (i+1) % 20 == 0:
             with torch.no_grad():
-                img = model.w.transpose(1, 2).transpose(2, 3).detach()
-                PIL.Image.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
+                img = model()
+                _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
+                PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
 
     with torch.no_grad():
-        img = model.w.transpose(1, 2).transpose(2, 3).detach()
-        PIL.Image.fromarray(img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
+        img = model()
+        _img = (img.permute(0, 2, 3, 1) * 255).clamp(0, 255).to(torch.uint8)
+        PIL.Image.fromarray(_img[0].cpu().numpy(), 'RGB').save(f'{args["outdir"]}/seed{args["seed"]:04d}.png')
 
 
 if __name__ == "__main__":

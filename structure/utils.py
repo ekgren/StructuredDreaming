@@ -3,6 +3,7 @@ import random
 from torch.nn.functional import dropout, dropout2d, interpolate, avg_pool2d
 import torch
 
+
 class SamplePatch(object):
     def __init__(self, size_min, size_max):
         assert size_min <= size_max, "size_min should be equal or smaller than size_max."
@@ -15,7 +16,7 @@ class SamplePatch(object):
         """ Get uniformly sampled patch from image. """
         bs, ch, h, w = img.shape
         assert h == w, "Assumes equal width and height of image."
-        assert self.size_max <= h, "size_max has to be smaller than image height."
+        assert self.size_max <= h, "size_max has to be smaller than or equal to image height."
         if self.size_min == self.size_max:
             patch_size = self.size_max
         else:
@@ -55,7 +56,7 @@ class Upscale(object):
             return img
 
 
-class Downscale(object):
+class Pixelate(object):
     def __init__(self, scale_size_min, scale_size_max):
         self.scale_size_max = scale_size_max
         self.scale_size_min = scale_size_min
@@ -63,8 +64,7 @@ class Downscale(object):
     def __call__(self, img):
         bs, ch, h, w = img.shape
         downscale = random.randint(self.scale_size_min, self.scale_size_max)
-        return img
-        kernel_size = int(h / downscale)
+        kernel_size = int(max(1, h / downscale))
         return avg_pool2d(img, kernel_size)
 
 
@@ -78,14 +78,13 @@ class Pipeline(object):
             tmp = f(tmp)
         return tmp
 
+
 class Prod(object):
     def __init__(self, *args):
         self.functions = args
 
     def __call__(self, x):
         return [f(x) for f in self.functions]
-
-
 
 
 def get_sub(img, steps=2):
@@ -103,32 +102,6 @@ def get_sub(img, steps=2):
     return outs
 
 
-def process_img(img,
-                patches_no=32,
-                downscaled_no=32,
-                patch_size_min=32,
-                patch_size_max=224,
-                scale_size_min=32,
-                scale_size_max=224,
-                scale_patch_size_min=32,
-                scale_patch_size_max=224,
-                drop_patch=0.,
-                drop_downscaled=0.,
-                drop_patch_before_upscale=False,
-                drop_downscaled_before_upscale=False,
-                drop_patch_2d=True,
-                drop_downscale_2d=True,
-                res_out=224,
-                mode='area'):
-
-
-    patches = [Pipeline(SamplePatch(32, 224), Dropper(d0), Downscale(32, 224), Dropper(d1), Upscale())]*downscaled_no 
-    patches += [Pipeline(SamplePatch(32, 224), Downscale(32, 224), Upscale())]*downscaled_no 
-    patches += [Pipeline(SamplePatch(32, 224), Dropper(drop_patch), Upscale())]*patches_no
-    patches = Prod(*patches)
-
-    return torch.cat(patches(img), 0)
-
 def grad_drop(grad, drop=0., drop2d=True):
     """ Dropout gradient. """
     with torch.no_grad():
@@ -142,3 +115,9 @@ def grad_sign(grad):
     """ Convert gradient to signed gradient. """
     with torch.no_grad():
         grad += -grad + grad.sign()
+
+
+def model_to_fp32(model):
+    for p in model.parameters():
+        p.data = p.data.float()
+        p.grad.data = p.grad.data.float()
