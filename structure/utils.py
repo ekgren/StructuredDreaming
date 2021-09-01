@@ -119,11 +119,11 @@ class RandomMirror(object):
         elif augmentation == 3:
             img_l = img[:, :, :, :w // 2]
             img_r = (img[:, :, :, w // 2:] + torch.flip(img[:, :, :, :w // 2], [3])) / 2
-            img_out = torch.cat([img_l, img_r], dim=3)
+            img = torch.cat([img_l, img_r], dim=3)
         elif augmentation == 4:
             img_l = (img[:, :, :, :w // 2] + torch.flip(img[:, :, :, w // 2:], [3])) / 2
             img_r = img[:, :, :, w // 2:]
-            img_out = torch.cat([img_l, img_r], dim=3)
+            img = torch.cat([img_l, img_r], dim=3)
         return img
 
 
@@ -149,7 +149,7 @@ class Flip(object):
     def __call__(self, img):
         if random.randint(0, 1) == 0:
             return img
-        return torch.flip(img_out, [3])
+        return torch.flip(img, [3])
 
 
 class Pipeline(object):
