@@ -32,7 +32,7 @@ class SamplePatch(object):
 
 
 class Dropper(object):
-    def __init__(self, drop=0., drop2d=True):
+    def __init__(self, drop=0., drop2d=False):
         self.drop = drop
         self.drop2d = drop2d
 
@@ -66,6 +66,89 @@ class Pixelate(object):
         downscale = random.randint(self.scale_size_min, self.scale_size_max)
         kernel_size = int(max(1, h / downscale))
         return avg_pool2d(img, kernel_size)
+
+
+class RandomPool(object):
+    def __init__(self, kernel_min=1, kernel_max=8):
+        self.kernel_min = kernel_min
+        self.kernel_max = kernel_max
+
+    def __call__(self, img, pad_val=None):
+        pad_val = pad_val if pad_val is not None else random.random() * 2. - 1.
+        kernel_size = random.randint(self.kernel_min,
+                                     random.randint(self.kernel_min,
+                                                    self.kernel_max))
+        # kernel_size = random.randint(self.kernel_min, self.kernel_max)
+        pad_size = random.randint(0, kernel_size - 1)
+        action = random.randint(0, 3)
+        if action == 0:
+            pad = (pad_size, pad_size, 0, 0)
+        elif action == 1:
+            pad = (pad_size, 0, 0, pad_size)
+        elif action == 2:
+            pad = (0, pad_size, pad_size, 0)
+        elif action == 3:
+            pad = (0, 0, pad_size, pad_size)
+        img = torch.nn.functional.pad(img,
+                                      pad,
+                                      mode='constant',
+                                      value=pad_val)
+        img = avg_pool2d(img, kernel_size=kernel_size, stride=None, padding=0)
+        return img
+
+
+class RandomMirror(object):
+    def __init__(self, blend=False):
+        # Blend not properly implemented
+        self.modes = 2 if blend is False else 4
+
+    def __call__(self, img):
+        bs, ch, h, w = img.shape
+        augmentation = random.randint(0, self.modes)
+        if augmentation == 0:
+            pass
+        elif augmentation == 1:
+            img_l = img[:, :, :, :w // 2]
+            img_r = torch.flip(img[:, :, :, :w // 2], [3])
+            img = torch.cat([img_l, img_r], dim=3)
+        elif augmentation == 2:
+            img_l = torch.flip(img[:, :, :, w // 2:], [3])
+            img_r = img[:, :, :, w // 2:]
+            img = torch.cat([img_l, img_r], dim=3)
+        elif augmentation == 3:
+            img_l = img[:, :, :, :w // 2]
+            img_r = (img[:, :, :, w // 2:] + torch.flip(img[:, :, :, :w // 2], [3])) / 2
+            img_out = torch.cat([img_l, img_r], dim=3)
+        elif augmentation == 4:
+            img_l = (img[:, :, :, :w // 2] + torch.flip(img[:, :, :, w // 2:], [3])) / 2
+            img_r = img[:, :, :, w // 2:]
+            img_out = torch.cat([img_l, img_r], dim=3)
+        return img
+
+
+class RandomPad(object):
+    def __init__(self, pad_min=0, pad_max=224):
+        self.pad_min = pad_min
+        self.pad_max = pad_max
+
+    def __call__(self, img, pad_val=None):
+        pad_val = pad_val if pad_val is not None else random.random() * 2. - 1.
+        pad = (random.randrange(self.pad_min, self.pad_max, 2),
+               random.randrange(self.pad_min, self.pad_max, 2),
+               random.randrange(self.pad_min, self.pad_max, 2),
+               random.randrange(self.pad_min, self.pad_max, 2))
+        return torch.nn.functional.pad(img, pad, mode='constant', value=pad_val)
+
+
+class Flip(object):
+    """ Horizontal random flip p=0.5 """
+    def __init__(self, scale_size_min, scale_size_max):
+        pass
+
+    def __call__(self, img):
+        if random.randint(0, 1) == 0:
+            return img
+        return torch.flip(img_out, [3])
 
 
 class Pipeline(object):
