@@ -75,6 +75,7 @@ class RandomPool(object):
 
     def __call__(self, img, pad_val=None):
         pad_val = pad_val if pad_val is not None else random.random() * 2. - 1.
+        # Double uniform sample different distribution
         kernel_size = random.randint(self.kernel_min,
                                      random.randint(self.kernel_min,
                                                     self.kernel_max))
@@ -142,7 +143,7 @@ class RandomPad(object):
 
 class Flip(object):
     """ Horizontal random flip p=0.5 """
-    def __init__(self, scale_size_min, scale_size_max):
+    def __init__(self):
         pass
 
     def __call__(self, img):
