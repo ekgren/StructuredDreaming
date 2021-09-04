@@ -1,5 +1,7 @@
 import torch
 
+from .optim import BoostGrad
+
 
 class ImgBase(torch.nn.Module):
     """ X """
@@ -33,9 +35,12 @@ class ImgBaseFFT(torch.nn.Module):
         w = torch.fft.rfft2(torch.randn(1, 3, size, size, requires_grad=True) * weight_init)
         self.w = torch.nn.Parameter(w)
         self.act = torch.sin
+        self.bg = BoostGrad()
+
 
     def forward(self):
         img = torch.fft.irfft2(self.w)
+        img = self.bg.apply(img)
         img = self.color(img.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
         return img
 
