@@ -29,17 +29,21 @@ class ImgBaseFFT(torch.nn.Module):
         super().__init__()
         self.size = size
         self.k = k
+        self.color = torch.nn.Linear(3, 3, bias=False)
         w = torch.fft.rfft2(torch.randn(1, 3, size, size, requires_grad=True) * weight_init)
         self.w = torch.nn.Parameter(w)
         self.act = torch.sin
 
     def forward(self):
-        return torch.fft.irfft2(self.w)
+        img = torch.fft.irfft2(self.w)
+        img = self.color(img.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        return img
 
     def get_img(self, size=None):
         size = size if size is not None else self.size
-        img_out = torch.fft.irfft2(self.w)
+        img = torch.fft.irfft2(self.w)
         if size != self.size:
-            img_out = torch.nn.functional.interpolate(img_out, (size, size), mode='area')
-        return (self.act(img_out / self.k) + 1.) / 2.
+            img = torch.nn.functional.interpolate(img, (size, size), mode='area')
+        img = self.color(img.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
+        return (img.clamp(-self.k, self.k) + self.k)/(2*self.k)
 
