@@ -69,6 +69,16 @@ class Pixelate(object):
 
 
 class RandomPool(object):
+    """
+    Randomly pads the input image with a value between -1 and 1.
+
+    Args:
+        img (torch.Tensor): Input image.
+        pad_val (float, optional): The value to pad with. Defaults to random.random() * 2. - 1.
+
+    Returns:
+        torch.Tensor: The padded image.
+    """
     def __init__(self, kernel_min=1, kernel_max=8):
         self.kernel_min = kernel_min
         self.kernel_max = kernel_max
@@ -80,20 +90,6 @@ class RandomPool(object):
                                      random.randint(self.kernel_min,
                                                     self.kernel_max))
         # kernel_size = random.randint(self.kernel_min, self.kernel_max)
-        pad_size = random.randint(0, kernel_size - 1)
-        action = random.randint(0, 3)
-        if action == 0:
-            pad = (pad_size, pad_size, 0, 0)
-        elif action == 1:
-            pad = (pad_size, 0, 0, pad_size)
-        elif action == 2:
-            pad = (0, pad_size, pad_size, 0)
-        elif action == 3:
-            pad = (0, 0, pad_size, pad_size)
-        img = torch.nn.functional.pad(img,
-                                      pad,
-                                      mode='constant',
-                                      value=pad_val)
         img = avg_pool2d(img, kernel_size=kernel_size, stride=None, padding=0)
         return img
 
@@ -128,17 +124,18 @@ class RandomMirror(object):
 
 
 class RandomPad(object):
-    def __init__(self, pad_min=0, pad_max=224):
+    def __init__(self, pad_min=0, pad_max=224, step=1):
         self.pad_min = pad_min
         self.pad_max = pad_max
+        self.step = step
 
-    def __call__(self, img, pad_val=None):
-        pad_val = pad_val if pad_val is not None else random.random() * 2. - 1.
-        pad = (random.randrange(self.pad_min, self.pad_max, 2),
-               random.randrange(self.pad_min, self.pad_max, 2),
-               random.randrange(self.pad_min, self.pad_max, 2),
-               random.randrange(self.pad_min, self.pad_max, 2))
-        return torch.nn.functional.pad(img, pad, mode='constant', value=pad_val)
+    def __call__(self, img):
+        pad_modes = ['circular', 'reflect', 'replicate']
+        pad = (random.randrange(self.pad_min, self.pad_max, self.step),
+               random.randrange(self.pad_min, self.pad_max, self.step),
+               random.randrange(self.pad_min, self.pad_max, self.step),
+               random.randrange(self.pad_min, self.pad_max, self.step))
+        return torch.nn.functional.pad(img, pad, mode=random.choice(pad_modes))
 
 
 class Flip(object):
