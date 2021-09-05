@@ -31,3 +31,15 @@ class ClampGrad(torch.autograd.Function):
     def backward(ctx, grad_output):
         i, = ctx.saved_tensors
         return grad_output.clamp(-0.0005, 0.0005)
+
+
+class BoostGrad(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, i):
+        ctx.save_for_backward(i)
+        return i
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        i, = ctx.saved_tensors
+        return grad_output.mul(1e+8)
