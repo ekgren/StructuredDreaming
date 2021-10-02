@@ -2,6 +2,7 @@
 ###### Note that this is a work in progress and will change or freeze in time in an unfinished state.
 
 ## Colabs
+![Styledream_thumb](res/styledream_thumb.jpeg)  
 [Styledreams](https://colab.research.google.com/github/ekgren/StructuredDreaming/blob/main/colabs/Structured_Dreaming_Styledreams.ipynb)
 -- CLIP x Stylegan2 notebook
 
