@@ -21,7 +21,7 @@ class SimpleSGD(Optimizer):
         return loss
 
 
-class ClampSGD(torch.optim.Optimizer):
+class ClampSGD(Optimizer):
     def __init__(self, params, lr=0.1, clamp=1e-9):
         defaults = dict(lr=lr, clamp=clamp)
         super().__init__(params, defaults)
