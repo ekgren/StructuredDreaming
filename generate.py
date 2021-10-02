@@ -11,7 +11,7 @@ import torchvision
 from tqdm import tqdm
 
 from structure.clip import load, tokenize, convert_weights
-from structure.model import ImgBase
+from structure.model import ImgBaseOld
 from structure.utils import Pipeline, Upscale, Pixelate, Dropper, Prod, SamplePatch, grad_sign, model_to_fp32, ArgDict
 
 @click.command()
@@ -94,10 +94,10 @@ def main(ctx, **config_kwargs):
     text_latent = perceptor.encode_text(txt_tok.cuda()).detach()
 
     # Setting up image generation
-    model = ImgBase(size=args.image_size,
-                    weight_init=args.weight_init,
-                    decolorize=args.decolorize,
-                    darken=args.darken).cuda()
+    model = ImgBaseOld(size=args.image_size,
+                       weight_init=args.weight_init,
+                       decolorize=args.decolorize,
+                       darken=args.darken).cuda()
     normalize = torchvision.transforms.Normalize((0.48145466, 0.4578275, 0.40821073),
                                                  (0.26862954, 0.26130258, 0.27577711))
     optimizer = torch.optim.Adam(model.parameters(), args.lr, betas=betas)

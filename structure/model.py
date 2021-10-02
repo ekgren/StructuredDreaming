@@ -1,9 +1,34 @@
 import torch
 
-from .optim import BoostGrad
+from .autograd import BoostGrad
 
 
 class ImgBase(torch.nn.Module):
+    def __init__(self,
+                 size: int = 224,
+                 k: float = 5.,
+                 weight_init: float = 0.05):
+        super().__init__()
+        self.size = size
+        self.k = k
+
+        self.color = torch.nn.Parameter(torch.tensor([[-0.1409, 0.0855, -0.7620],
+                                                      [0.2596, -0.5239, 0.0996],
+                                                      [0.1653, -0.0719, 0.0889]]))
+        self.w = torch.nn.Parameter(torch.randn(1, 3, size, size, requires_grad=True) * weight_init)
+
+    def forward(self) -> torch.Tensor:
+        img = self.w
+        color = self.color / self.color.norm(p=2)
+        img = torch.nn.functional.linear(img.permute(0, 2, 3, 1), color).permute(0, 3, 1, 2)
+        img = self.to_rgb(img, self.k)
+        return img
+
+    def to_rgb(self, input: torch.Tensor, k: float) -> torch.Tensor:
+        return (input.clamp(-k, k) + k) / (2 * k)
+
+
+class ImgBaseOld(torch.nn.Module):
     """ X """
     def __init__(self, size=224, weight_init=0.05, decolorize=0., darken=0.):
         super().__init__()
