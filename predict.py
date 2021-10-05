@@ -17,10 +17,6 @@ class Predictor(cog.Predictor):
     def setup(self):
         self.perceptor, self.normalize_image = structure.clip.load('ViT-B/16', jit=False)
         self.device = torch.device('cuda')
-        with dnnlib.util.open_url('ffhq.pkl') as f:
-            self.G = legacy.load_network_pkl(f)['G_ema'].to(self.device)  # type: ignore
-        for p in self.G.parameters():
-            p.requires_grad = True
 
     @cog.input(
         "prompt",
@@ -43,6 +39,10 @@ class Predictor(cog.Predictor):
         help="display frequency for intermediate generated images"
     )
     def predict(self, prompt, iterations=300, display_frequency=30):
+        with dnnlib.util.open_url('ffhq.pkl') as f:
+            G = legacy.load_network_pkl(f)['G_ema'].to(self.device)  # type: ignore
+        for p in G.parameters():
+            p.requires_grad = True
         c = None
         # Training parameters
         grad_acc_steps = 1
@@ -65,7 +65,7 @@ class Predictor(cog.Predictor):
             structure.sample.ImgSampleStylegan(kernel_min=kernel_min,
                                                kernel_max=kernel_max).to(self.device)
         )
-        optimizer = structure.optim.ClampSGD(list(self.G.parameters()),
+        optimizer = structure.optim.ClampSGD(list(G.parameters()),
                                              lr=lr,
                                              clamp=clamp_val)
 
@@ -74,16 +74,16 @@ class Predictor(cog.Predictor):
         for i in range(iterations):
             if i > 0 and i % display_frequency == 0:
                 with torch.no_grad():
-                    z = torch.randn([1, self.G.z_dim], device=self.device)
-                    img = self.G(z, c, truncation_psi)
+                    z = torch.randn([1, G.z_dim], device=self.device)
+                    img = G(z, c, truncation_psi)
                     img = stylegan_to_rgb(img)
                     yield checkin(img, out_path, i, loss)
                     im_no += 1
 
             for _ in range(grad_acc_steps):
                 optimizer.zero_grad()
-                z = torch.randn([1, self.G.z_dim], device=self.device)
-                img = self.G(z, c, truncation_psi)
+                z = torch.randn([1, G.z_dim], device=self.device)
+                img = G(z, c, truncation_psi)
                 img = stylegan_to_rgb(img)
                 img = sampler(img, size=224, bs=batch_size)
                 img = self.normalize_image(img)
@@ -93,8 +93,8 @@ class Predictor(cog.Predictor):
 
             optimizer.step()
 
-        z = torch.randn([1, self.G.z_dim], device=self.device)
-        img = self.G(z, c, truncation_psi)
+        z = torch.randn([1, G.z_dim], device=self.device)
+        img = G(z, c, truncation_psi)
         img = stylegan_to_rgb(img)
         yield checkin(img, out_path)
 
