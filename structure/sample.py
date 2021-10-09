@@ -1,6 +1,6 @@
 import torch
 
-from .transform import noise
+from . import transform
 
 
 @torch.jit.script
@@ -64,33 +64,61 @@ def random_generate_grid(l: int = 2,
 class ImgSampleStylegan(torch.nn.Module):
     def __init__(self,
                  kernel_min: int = 1,
-                 kernel_max: int = 8):
+                 kernel_max: int = 8,
+                 grid_size_min: int = 224,
+                 grid_size_max: int = 448,
+                 noise: float = 1.,
+                 noise_std: float = 0.3,
+                 cutout: float = 1.,
+                 cutout_size: float = 0.25,
+                 ):
         super().__init__()
         self.kernel_min = kernel_min
         self.kernel_max = kernel_max
+        self.grid_size_min = grid_size_min
+        self.grid_size_max = grid_size_max
+        self.noise = noise
+        self.noise_std = noise_std
+        self.cutout = cutout
+        self.cutout_size = cutout_size
 
-    def forward(self, input: torch.Tensor, size: int = 224, bs: int = 1) -> torch.Tensor:
-        rgbs = []
+    def forward(self, input: torch.Tensor,
+                size: int = 224,
+                bs: int = 1) -> torch.Tensor:
+        imgs = []
+
         for _ in range(bs):
-            kernel_size = int(
-                torch.randint(self.kernel_min, int(torch.randint(self.kernel_min + 1, self.kernel_max, ())), ()).item())
-            grid_size = int(size / 2 + torch.rand(()).item() * size)
+            # Draw kernel size from uniform x uniform distribution
+            kernel_size = int(torch.randint(self.kernel_min, int(torch.randint(self.kernel_min + 1, self.kernel_max, ())), ()).item())
 
-            img_out = noise(input)
-            img_out = torch.nn.functional.avg_pool2d(img_out,
-                                                     kernel_size=kernel_size,
-                                                     stride=kernel_size,
-                                                     padding=0)
+            # Generate grid for sampling
+            grid_mode_idx = int(torch.randint(1, 3, ()).item())
+            grid_mode = ('all', 'even', 'repeat')
+            grid_size = int(self.grid_size_min + torch.rand(()).item() * (self.grid_size_max - self.grid_size_min))
+            grid = random_generate_grid(grid_size, mode=grid_mode[grid_mode_idx])
 
-            mode_idx = int(torch.randint(1, 3, ()).item())
-            mode = ('all', 'even', 'repeat')
-            grid = random_generate_grid(grid_size, mode=mode[mode_idx])
-            img_out = torch.nn.functional.grid_sample(img_out,
-                                                      grid,
-                                                      mode='bilinear',
-                                                      padding_mode='zeros',
-                                                      align_corners=False)
-            img_out = torch.nn.functional.interpolate(img_out, (size, size), mode='area')
-            rgbs.append(img_out)
+            # Sample original input
+            img = torch.nn.functional.grid_sample(input,
+                                                  grid,
+                                                  mode='bilinear',
+                                                  padding_mode='zeros',
+                                                  align_corners=False)
+            img = torch.nn.functional.interpolate(img, (size, size), mode='area')
+            imgs.append(img)
 
-        return torch.cat(rgbs, dim=0)
+            # Transform, downsize and sample original input
+            img = transform.noise(input, noise=self.noise, noise_std=self.noise_std)
+            img = transform.cutout(img, cutout=self.cutout, cutout_size=self.cutout_size)
+            img = torch.nn.functional.avg_pool2d(img,
+                                                 kernel_size=kernel_size,
+                                                 stride=kernel_size,
+                                                 padding=0)
+            img = torch.nn.functional.grid_sample(img,
+                                                  grid,
+                                                  mode='bilinear',
+                                                  padding_mode='zeros',
+                                                  align_corners=False)
+            img = torch.nn.functional.interpolate(img, (size, size), mode='area')
+            imgs.append(img)
+
+        return torch.cat(imgs, dim=0)
