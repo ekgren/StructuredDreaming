@@ -1,5 +1,5 @@
 # Structured Dreaming
-###### Note that this is a work in progress and will change or freeze in time in an unfinished state.
+###### Note that this is a work in progress and will change or it might freeze in time in an unfinished state.
 
 ## Colabs
 ![Styledream_thumb](res/styledream_thumb.jpeg)  
