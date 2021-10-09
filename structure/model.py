@@ -1,6 +1,6 @@
 import torch
 
-from .autograd import BoostGrad
+from deprecated.autograd import BoostGrad
 
 
 class ImgBase(torch.nn.Module):
