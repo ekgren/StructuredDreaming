@@ -1,5 +1,6 @@
 import math
 import torch
+from torch import Tensor
 from torch.optim import Optimizer
 from typing import List, Optional
 
