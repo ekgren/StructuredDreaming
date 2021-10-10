@@ -95,10 +95,10 @@ class ImgSampleBase(torch.nn.Module):
         self.noise_std = noise_std
         self.cutout = cutout
         self.cutout_size = cutout_size
-        self.perspective_transformer = T.RandomPerspective(
+        self.perspective_transformer = torchvision.transforms.RandomPerspective(
             distortion_scale=distortion_scale,
             p=perspective,
-            interpolation=T.InterpolationMode.BILINEAR,
+            interpolation=torchvision.transforms.InterpolationMode.BILINEAR,
         )
 
     def forward(
