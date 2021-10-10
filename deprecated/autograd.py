@@ -38,7 +38,8 @@ class BoostGrad(torch.nn.Module):
     boost_val : float
         The value by which the gradient of the input tensor is boosted.
     """
-    def __init__(self, boost_val: float = 1e+1):
+
+    def __init__(self, boost_val: float = 1e1):
         super().__init__()
         self.boost_grad = BoostGradFunc.apply
         self.boost_val = boost_val
@@ -61,6 +62,7 @@ class ClampGrad(torch.nn.Module):
     forward(input)
         Clamps the gradients of the input tensor to be between -clamp_val and clamp_val.
     """
+
     def __init__(self, clamp_val: float = 1e-6):
         super().__init__()
         self.clamp_grad = ClampGradFunc.apply

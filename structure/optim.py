@@ -27,7 +27,7 @@ class SimpleSGD(Optimizer):
 
 
 class ClampSGD(Optimizer):
-    r""" Clamp SGD
+    r"""Clamp SGD
     Args:
         params (iterable): iterable of parameters to optimize or dicts defining
             parameter groups
@@ -35,7 +35,8 @@ class ClampSGD(Optimizer):
         clamp (float, optional): clamping of gradient (default: 1e-30)
         drop (float, optional): dropout of gradient (default: 0)
     """
-    def __init__(self, params, lr=1e-1, clamp=1e-30, drop=0.):
+
+    def __init__(self, params, lr=1e-1, clamp=1e-30, drop=0.0):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= drop < 1.0:
@@ -55,7 +56,9 @@ class ClampSGD(Optimizer):
                 lr = group["lr"]
                 clamp = group["clamp"]
                 drop = group["drop"]
-                grad = torch.nn.functional.dropout(p.grad.data.clamp_(-clamp, clamp).div_(clamp), p=drop)
+                grad = torch.nn.functional.dropout(
+                    p.grad.data.clamp_(-clamp, clamp).div_(clamp), p=drop
+                )
                 p.data.add_(grad, alpha=-lr)
         return loss
 
@@ -87,8 +90,17 @@ class AdamW(Optimizer):
         https://openreview.net/forum?id=ryQu7f-RZ
     """
 
-    def __init__(self, params, lr=1e-3, betas=(0.9, 0.999), eps=1e-8,
-                 weight_decay=1e-2, amsgrad=False, clamp=1e-30, drop=0.):
+    def __init__(
+        self,
+        params,
+        lr=1e-3,
+        betas=(0.9, 0.999),
+        eps=1e-8,
+        weight_decay=1e-2,
+        amsgrad=False,
+        clamp=1e-30,
+        drop=0.0,
+    ):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
@@ -101,15 +113,21 @@ class AdamW(Optimizer):
             raise ValueError("Invalid weight_decay value: {}".format(weight_decay))
         if not 0.0 <= drop < 1.0:
             raise ValueError("Invalid dropout value: {}".format(drop))
-        defaults = dict(lr=lr, betas=betas, eps=eps,
-                        weight_decay=weight_decay, amsgrad=amsgrad,
-                        clamp=clamp, drop=drop)
+        defaults = dict(
+            lr=lr,
+            betas=betas,
+            eps=eps,
+            weight_decay=weight_decay,
+            amsgrad=amsgrad,
+            clamp=clamp,
+            drop=drop,
+        )
         super(AdamW, self).__init__(params, defaults)
 
     def __setstate__(self, state):
         super(AdamW, self).__setstate__(state)
         for group in self.param_groups:
-            group.setdefault('amsgrad', False)
+            group.setdefault("amsgrad", False)
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -132,80 +150,93 @@ class AdamW(Optimizer):
             state_sums = []
             max_exp_avg_sqs = []
             state_steps = []
-            amsgrad = group['amsgrad']
-            beta1, beta2 = group['betas']
-            clamp = group['clamp']
-            drop = group['drop']
+            amsgrad = group["amsgrad"]
+            beta1, beta2 = group["betas"]
+            clamp = group["clamp"]
+            drop = group["drop"]
 
-            for p in group['params']:
+            for p in group["params"]:
                 if p.grad is None:
                     continue
                 params_with_grad.append(p)
                 if p.grad.is_sparse:
-                    raise RuntimeError('AdamW does not support sparse gradients')
+                    raise RuntimeError("AdamW does not support sparse gradients")
                 grads.append(p.grad)
 
                 state = self.state[p]
 
                 # State initialization
                 if len(state) == 0:
-                    state['step'] = 0
+                    state["step"] = 0
                     # Exponential moving average of gradient values
-                    state['exp_avg'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state["exp_avg"] = torch.zeros_like(
+                        p, memory_format=torch.preserve_format
+                    )
                     # Exponential moving average of squared gradient values
-                    state['exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                    state["exp_avg_sq"] = torch.zeros_like(
+                        p, memory_format=torch.preserve_format
+                    )
                     if amsgrad:
                         # Maintains max of all exp. moving avg. of sq. grad. values
-                        state['max_exp_avg_sq'] = torch.zeros_like(p, memory_format=torch.preserve_format)
+                        state["max_exp_avg_sq"] = torch.zeros_like(
+                            p, memory_format=torch.preserve_format
+                        )
 
-                exp_avgs.append(state['exp_avg'])
-                exp_avg_sqs.append(state['exp_avg_sq'])
+                exp_avgs.append(state["exp_avg"])
+                exp_avg_sqs.append(state["exp_avg_sq"])
 
                 if amsgrad:
-                    max_exp_avg_sqs.append(state['max_exp_avg_sq'])
+                    max_exp_avg_sqs.append(state["max_exp_avg_sq"])
 
                 # update the steps for each param group update
-                state['step'] += 1
+                state["step"] += 1
                 # record the step after step update
-                state_steps.append(state['step'])
+                state_steps.append(state["step"])
 
-            adamw(params_with_grad,
-                  grads,
-                  exp_avgs,
-                  exp_avg_sqs,
-                  max_exp_avg_sqs,
-                  state_steps,
-                  amsgrad=amsgrad,
-                  beta1=beta1,
-                  beta2=beta2,
-                  lr=group['lr'],
-                  weight_decay=group['weight_decay'],
-                  eps=group['eps'],
-                  clamp=clamp,
-                  drop=drop)
+            adamw(
+                params_with_grad,
+                grads,
+                exp_avgs,
+                exp_avg_sqs,
+                max_exp_avg_sqs,
+                state_steps,
+                amsgrad=amsgrad,
+                beta1=beta1,
+                beta2=beta2,
+                lr=group["lr"],
+                weight_decay=group["weight_decay"],
+                eps=group["eps"],
+                clamp=clamp,
+                drop=drop,
+            )
 
         return loss
 
-def adamw(params: List[Tensor],
-          grads: List[Tensor],
-          exp_avgs: List[Tensor],
-          exp_avg_sqs: List[Tensor],
-          max_exp_avg_sqs: List[Tensor],
-          state_steps: List[int],
-          *,
-          amsgrad: bool,
-          beta1: float,
-          beta2: float,
-          lr: float,
-          weight_decay: float,
-          eps: float,
-          clamp: float,
-          drop: float):
+
+def adamw(
+    params: List[Tensor],
+    grads: List[Tensor],
+    exp_avgs: List[Tensor],
+    exp_avg_sqs: List[Tensor],
+    max_exp_avg_sqs: List[Tensor],
+    state_steps: List[int],
+    *,
+    amsgrad: bool,
+    beta1: float,
+    beta2: float,
+    lr: float,
+    weight_decay: float,
+    eps: float,
+    clamp: float,
+    drop: float
+):
     r"""Functional API that performs AdamW algorithm computation.
     See :class:`~torch.optim.AdamW` for details.
     """
     for i, param in enumerate(params):
-        grad = torch.nn.functional.dropout(grads[i].clamp_(-clamp, clamp).div_(clamp), p=drop)
+        grad = torch.nn.functional.dropout(
+            grads[i].clamp_(-clamp, clamp).div_(clamp), p=drop
+        )
         exp_avg = exp_avgs[i]
         exp_avg_sq = exp_avg_sqs[i]
         step = state_steps[i]
