@@ -84,6 +84,7 @@ class ImgSampleBase(torch.nn.Module):
         cutout: float = 1.0,
         cutout_size: float = 0.25,
         distortion_scale: float = 0.5,
+        perspective: float = 1.0,
     ):
         super().__init__()
         self.kernel_min = kernel_min
@@ -96,7 +97,7 @@ class ImgSampleBase(torch.nn.Module):
         self.cutout_size = cutout_size
         self.perspective_transformer = T.RandomPerspective(
             distortion_scale=distortion_scale,
-            p=1.0,
+            p=perspective,
             interpolation=T.InterpolationMode.BILINEAR,
         )
 
@@ -130,6 +131,10 @@ class ImgSampleBase(torch.nn.Module):
             )
             img = torch.nn.functional.interpolate(img, (size, size), mode="area")
             imgs.append(img)
+            imgs.append(self.perspective_transformer(img))
+            img = torch.flip(img, [3])
+            imgs.append(img)
+            imgs.append(self.perspective_transformer(img))
 
             # Transform, downsize and sample original input
             img = transform.noise(input, noise=self.noise, noise_std=self.noise_std)
@@ -144,6 +149,10 @@ class ImgSampleBase(torch.nn.Module):
             )
             img = torch.nn.functional.interpolate(img, (size, size), mode="area")
             imgs.append(img)
+            imgs.append(self.perspective_transformer(img))
+            img = torch.flip(img, [3])
+            imgs.append(img)
+            imgs.append(self.perspective_transformer(img))
 
         return torch.cat(imgs, dim=0)
 
