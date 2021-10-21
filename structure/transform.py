@@ -51,3 +51,19 @@ def cutout(
         mask = torch.logical_or(mask_x, mask_y).to(torch.float32)
         input = input * mask
     return input
+
+
+@torch.jit.script
+def color(input: torch.Tensor,
+            c: torch.Tensor,
+            c_bias: torch.Tensor,
+            c_scale: torch.Tensor) -> torch.Tensor:
+    c = torch.sin(c)
+    c = c / (c.norm() + 1e-8)
+    c_bias = torch.sin(c_bias)
+    c_bias = c_bias / (c_bias.norm() + 1e-8)
+    input = input.permute(0, 2, 3, 1)
+    input = torch.nn.functional.linear(input, c, bias=c_bias)
+    input = input.permute(0, 3, 1, 2) * c_scale
+    input = (torch.sin(input) + 1.)/2.
+    return input
