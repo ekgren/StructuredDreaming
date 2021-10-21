@@ -63,6 +63,42 @@ class ClampSGD(Optimizer):
         return loss
 
 
+class SignSGD(Optimizer):
+    r"""Sign SGD
+    Args:
+        params (iterable): iterable of parameters to optimize or dicts defining
+            parameter groups
+        lr (float, optional): learning rate (default: 1e-1)
+        drop (float, optional): dropout of gradient (default: 0)
+    """
+
+    def __init__(self, params, lr=1e-1, drop=0.0):
+        if not 0.0 <= lr:
+            raise ValueError("Invalid learning rate: {}".format(lr))
+        if not 0.0 <= drop < 1.0:
+            raise ValueError("Invalid dropout value: {}".format(drop))
+        defaults = dict(lr=lr, drop=drop)
+        super().__init__(params, defaults)
+
+    @torch.no_grad()
+    def step(self, closure=None):
+        loss = None
+        if closure is not None:
+            loss = closure()
+        for group in self.param_groups:
+            for p in group["params"]:
+                if p.grad is None:
+                    continue
+                lr = group["lr"]
+                clamp = group["clamp"]
+                drop = group["drop"]
+                grad = torch.nn.functional.dropout(
+                    p.grad.data.sign_(), p=drop
+                )
+                p.data.add_(grad, alpha=-lr)
+        return loss
+
+
 class AdamW(Optimizer):
     r"""Implements AdamW algorithm.
 
