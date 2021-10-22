@@ -64,6 +64,6 @@ def color(input: torch.Tensor,
     c_bias = c_bias / (c_bias.norm() + 1e-8)
     input = input.permute(0, 2, 3, 1)
     input = torch.nn.functional.linear(input, c, bias=c_bias)
-    input = input.permute(0, 3, 1, 2) * c_scale
+    input = input.permute(0, 3, 1, 2) * c_scale.abs()
     input = (torch.sin(input) + 1.)/2.
     return input
