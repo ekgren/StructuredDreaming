@@ -4,11 +4,11 @@
 ## Colabs
 ![Styledream_thumb](res/styledream_thumb.jpeg)  
 [Styledreams](https://colab.research.google.com/github/ekgren/StructuredDreaming/blob/main/colabs/Structured_Dreaming_Styledreams.ipynb)
--- CLIP x Stylegan2 notebook
+-- CLIP x StyleGAN2 notebook for fine-tuning StyleGAN2 from CLIP. 
 
 ![Styledream_thumb](res/styledream_face_thumb.jpeg)  
 [Styledreams Faces](https://colab.research.google.com/github/ekgren/StructuredDreaming/blob/main/colabs/Structured_Dreaming_Styledreams_faces.ipynb)
--- CLIP x Stylegan2 notebook for finding a face from a photo in Stylegan latent space and then fine-tuning the model to change the face.
+-- CLIP x StyleGAN2 notebook for finding a face from a photo in Stylegan latent space and then fine-tuning the model from CLIP to change the face.
 
 ## Optimizer
 In this repo The ClampSGD optimizer is used it also has it's own repository here: [https://github.com/ekgren/open-optimizers](https://github.com/ekgren/open-optimizers).
