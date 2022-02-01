@@ -22,7 +22,7 @@ def align_image(img,
     Expects an image and a landmarks vector as input.
     Return aligned image.
     """
-    
+
     lm = np.array(lm)
     lm_chin          = lm[0  : 17]  # left-right
     lm_eyebrow_left  = lm[17 : 22]  # left-right
