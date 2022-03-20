@@ -13,6 +13,8 @@
 ## Optimizer
 In this repo The ClampSGD optimizer is used it also has it's own repository here: [https://github.com/ekgren/open-optimizers](https://github.com/ekgren/open-optimizers).
 
+<a href="https://replicate.ai/ekgren/structureddreaming"><img src="https://img.shields.io/static/v1?label=Replicate&message=Demo and Docker Image&color=blue"></a>
+
 ## Introduction
 By now it is well known that neural networks trained to classify images also have the capacity to generate
 images [[1]](#1). There are a lot of variations on
